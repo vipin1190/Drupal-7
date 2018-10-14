@@ -1,0 +1,574 @@
+<?php
+
+/**
+ * 
+ * NewsBucket Module
+ * @file newsbucket.module
+ * @author Vipin Suthar <vipin.jangid45@gmail.com>
+ * @package NewsApi(REST) development integration
+ * @website: https://newsapi.org
+ */
+
+/**
+ * Implements hook_help().
+ * NewsBucket helps,
+ * @param String $path
+ *  relative path of URL to map `help` description.
+ * @param type $arg
+ * @return String
+ *  a help description about the specific content mapped to provided path.
+ */
+function newsbucket_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#newsbucket':
+      $return = '<h3>' . t('About NewsBucket') . '</h3';
+      $return .= t('NewsBucket is an idea of development towards learning the Drupal 7 Custom module development.');
+      $return .= t('The NewsBucket module will basically seeking for fetching news headlines on daily basis along with maintaining site database and providing users the access of those headlines.');
+      $return .= t('For more queries please write us to: vipin.jangid45@gmail.com');
+      $return .= t('Thank you :)');
+      return $return;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ * NewsBucket Permissions,
+ * @return Array
+ */
+function newsbucket_permission() {
+  return array(
+    'administer newsbucket' => array(
+      'title' => t('Administer NewsBucket'),
+      'description' => t('Perform Administerative tasks  on NewsBucket functionality')
+    )
+  );
+}
+
+/**
+ * Implements hook_menu().
+ * NewsBucket URL Router configurations,
+ * @return Array
+ */
+function newsbucket_menu() {
+
+  $items = array();
+
+  //Administer Configurations
+  $items['admin/config/newsbucket'] = array(
+    'title' => t('Administer NewsBucket'),
+    'description' => t('Administer NewsBucket configurations.'),
+    'access arguments' => array('administer newsbucket')
+  );
+
+  //Manage API settings
+  $items['admin/config/newsbucket/manage-api'] = array(
+    'title' => t('NewsBucket API Configuration'),
+    'description' => t('News-Content provider API setup'),
+    'access arguments' => array('administer newsbucket'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('newsbucket_admin_settings_form')
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form().
+ * NewsBucket configuration for Administration Settings form,
+ * @param String $node
+ * @param Array $form_state
+ * @return Array
+ */
+function newsbucket_admin_settings_form($node, &$form_state) {
+
+  $form = array();
+  $weight = 1;
+
+  $form['introduction'] = array(
+    '#type' => 'item',
+    '#markup' => '<h1>Administrative site general configurations</h1>',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['config_api_provider'] = array(
+    '#title' => 'News API Provider',
+    '#description' => t('The title of the news API provider, who\'s services will be accessed.'),
+    '#type' => 'textfield',
+    '#name' => 'config_api_provider',
+    '#weight' => $weight++,
+    '#required' => TRUE,
+    '#default_value' => variable_get('newsbucket_api_provider'),
+  );
+
+  $form['config_api_url'] = array(
+    '#title' => 'News API Provider URL',
+    '#description' => t('The website url of the news API provider.'),
+    '#type' => 'textfield',
+    '#name' => 'config_api_url',
+    '#weight' => $weight++,
+    '#default_value' => variable_get('newsbucket_api_url'),
+  );
+
+  $form['config_api_auth_key'] = array(
+    '#title' => 'News API Auth-key',
+    '#description' => t('The Auth key provided for API cofiguration.'),
+    '#type' => 'textfield',
+    '#name' => 'config_api_auth_key',
+    '#weight' => $weight++,
+    '#required' => TRUE,
+    '#default_value' => variable_get('newsbucket_api_auth_key'),
+  );
+
+  $form['config_api_curl'] = array(
+    '#title' => 'News API Curl',
+    '#description' => t('The CUrl for API cofiguration, to fetch records.'),
+    '#type' => 'textfield',
+    '#name' => 'config_api_curl',
+    '#weight' => $weight++,
+    '#required' => TRUE,
+    '#default_value' => variable_get('newsbucket_api_curl'),
+  );
+
+  $form['config_api_requests_max'] = array(
+    '#title' => 'API request count(per request)',
+    '#description' => t('The max number of records to be fetched on each request.'),
+    '#type' => 'select',
+    '#name' => 'config_api_requests_max',
+    '#options' => array(
+      20 => 20,
+      50 => 50,
+      100 => 100,
+      150 => 150,
+      200 => 200,
+    ),
+    '#weight' => $weight++,
+    '#required' => TRUE,
+    '#default_value' => variable_get('config_api_requests_max'),
+  );
+
+  $form['config_api_requests_default'] = array(
+    '#title' => 'API request count(default)',
+    '#description' => t('The default number of records to be fetched on each request.'),
+    '#type' => 'textfield',
+    '#name' => 'config_api_requests_default',
+    '#weight' => $weight++,
+    '#required' => TRUE,
+    '#default_value' => variable_get('config_api_requests_default', 10),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * get NewsBucket profile configuration for $uid
+ * @param int $uid user primary key identifier
+ * @return object user profile object
+ */
+function _newsbucket_get_user_profile($uid = 0) {
+
+  if ($uid <= 0 || !db_table_exists('newsbucket_user_profiles')) {
+    return new stdClass();
+  }
+
+  $return = db_select('newsbucket_user_profiles', 'up')
+    ->fields('up', array('up_countries', 'up_categories', 'up_nof'))
+    ->condition('up_uid', $uid)
+    ->execute()
+    ->fetch();
+
+  if ($return === FALSE) {
+    $return = new stdClass();
+    $return->up_countries = '';
+    $return->up_categories = '';
+    $return->up_nof = variable_get('config_api_requests_default', 10);
+  }
+
+  return $return;
+}
+
+function _newsbucket_user_profile_resources() {
+
+  $return = new stdClass();
+
+  /** NewsBucket countries */
+  $nb_countries = db_select('newsbucket_country_category', 'cc')
+    ->fields('cc', array('cc_api_code', 'cc_country'))
+    ->condition('cc_status', 1)
+    ->orderBy('cc_country', 'ASC')
+    ->execute()
+    ->fetchAll();
+
+  $_nb_countries = array();
+  foreach ($nb_countries as $row) {
+    $_nb_countries[$row->cc_api_code] = t($row->cc_country);
+  }
+
+  $return->_nb_countries = $_nb_countries;
+
+  /** NewsBucket categories */
+  $nb_categories = db_select('newsbucket_publishers', 'np')
+    ->fields('np', array('p_category'))
+    ->distinct()
+    ->orderBy('p_category', 'ASC')
+    ->execute()
+    ->fetchAll();
+
+  $_nb_categories = array();
+  foreach ($nb_categories as $row) {
+    $_nb_categories[$row->p_category] = t(ucfirst($row->p_category));
+  }
+
+  $return->_nb_categories = $_nb_categories;
+
+  /** return options object */
+  return $return;
+}
+
+/**
+ * Implements hook_form_alter().
+ * Alter Drupal forms for NewsBucket's additionals information rendering.
+ * @param Array $form
+ * @param Array $form_state
+ * @param String $form_id
+ */
+function newsbucket_form_alter(&$form, &$form_state, $form_id) {
+
+  global $user;
+  switch ($form_id) {
+    case 'newsbucket_admin_settings_form':
+      $form['#submit'][] = '_newsbucket_submit_admin_settings';
+      break;
+    case 'user_profile_form':
+
+      /** fetch saved user profile configurations */
+      $up_config = _newsbucket_get_user_profile($user->uid);
+
+      /** fetch profile field resources */
+      $up_opts = _newsbucket_user_profile_resources();
+
+      /** Inject custom submit handler. */
+      $form['#submit'][] = '_newsbucket_user_submit';
+
+      /** Custom form elements. */
+      $fieldset_group = '_newsbucket_user_settings';
+      $form[$fieldset_group] = array(
+        '#type' => 'fieldset',
+        '#title' => t('NewsBucket Settings'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+        '#weight' => 6,
+      );
+
+      $form[$fieldset_group]['nb_news_countries'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t('Country'),
+        '#description' => t('Mark the counries from which you willing to receive news updates.'),
+        '#name' => 'nb_user_countries',
+        '#id' => 'nb_user_countries',
+        '#options' => $up_opts->_nb_countries,
+        '#default_value' => explode(',', $up_config->up_countries),
+      );
+
+      $form[$fieldset_group]['nb_news_categories'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t('Category'),
+        '#description' => t('Mark the category from which you willing to receive news updates.'),
+        '#name' => 'nb_news_categories',
+        '#id' => 'nb_news_categories',
+        '#options' => $up_opts->_nb_categories,
+        '#default_value' => explode(',', $up_config->up_categories),
+      );
+
+      $form[$fieldset_group]['nb_news_count'] = array(
+        '#type' => 'radios',
+        '#title' => t('Number of feeds'),
+        '#description' => t('Number of feeds to be displayed per page.'),
+        '#name' => 'nb_news_count',
+        '#id' => 'nb_news_count',
+        '#options' => array(10 => 10, 20 => 20),
+        '#default_value' => $up_config->up_nof,
+      );
+      break;
+  }
+}
+
+/**
+ * submit handler for NewsBucket user profile configurations.
+ * @param array $form
+ * @param array $form_state
+ */
+function _newsbucket_user_submit(&$form, &$form_state) {
+
+  $values = $form_state['values'];
+  $up_nof = $values['nb_news_count'];
+  $up_categories = implode(',', array_unique(array_filter($values['nb_news_categories'])));
+  $up_countries = implode(',', array_unique(array_filter($values['nb_news_countries'])));
+
+  db_merge('newsbucket_user_profiles')
+    ->key(array('up_uid' => $values['uid']))
+    ->fields(array(
+      'up_countries' => $up_countries,
+      'up_categories' => $up_categories,
+      'up_nof' => $up_nof
+    ))
+    ->execute();
+}
+
+/**
+ * Validate NewsBucket node form.
+ * @param Array $form
+ * @param Array $form_state
+ */
+function _newsbucket_submit_admin_settings(&$form, &$form_state) {
+
+  $values = $form_state['values'];
+
+  if (!empty($values['config_api_auth_key'])) {
+
+    $arguments = array(
+      'end_point' => 'sources',
+      'apiKey' => trim($values['config_api_auth_key']),
+    );
+
+    $api_response = _call_newsbucket_api($arguments);
+  }
+}
+
+/**
+ * node insert function for NewsBucket content type
+ * @global object $user
+ * @param array $node_field_values
+ */
+function _newsbucket_node_insert($node_field_values = array()) {
+
+  global $user;
+  $node = new stdClass();
+
+  $node->title = $node_field_values['title'];
+  $node->type = 'news_bucket';
+  $node->uid = $user->uid;
+  $node->status = 1;
+  $node->comment = 1;
+  $node->promote = 0;
+
+  /** set some defaults. */
+  node_object_prepare($node);
+
+  $node->body[LANGUAGE_NONE][]['summary'] = '';
+  $node->body[LANGUAGE_NONE][]['value'] = $node_field_values['body'];
+  $node->body[LANGUAGE_NONE][]['format'] = 'plain_text';
+  $node->newsbucket_publisher_id[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_publisher_id'];
+  $node->newsbucket_published_at[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_published_at'];
+  $node->newsbucket_publisher_name[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_publisher_name'];
+  $node->newsbucket_author_name[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_author_name'];
+  $node->newsbucket_url[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_url'];
+  $node->newsbucket_image[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_image'];
+  $node->newsbucket_content[LANGUAGE_NONE][]['value'] = $node_field_values['newsbucket_content'];
+
+  node_save(node_submit($node));
+}
+
+/**
+ * JSON array test,
+ * @param String $string
+ * @return Boolean
+ */
+function isJSON($string) {
+  return is_string($string) && is_array(json_decode($string, true)) && (json_last_error() == JSON_ERROR_NONE) ? true : false;
+}
+
+/**
+ * validate or filter request arguments
+ * @param Array $request_params
+ * @return Array
+ */
+function _call_newsbucket_sanitize_request_params($request_params = array()) {
+
+  $return = array('apiKey' => variable_get('newsbucket_api_auth_key', 'a075b689536d41698ed57e07eb250b18'));
+
+  foreach ($request_params as $queryIndex => $query) {
+
+    if (empty($query)) {
+      continue;
+    }
+
+    switch ($queryIndex) {
+      case 'country':
+        /* db_select('newsbucket_country_category', 'cc')
+          ->fields('cc', array('cc_country', 'cc_api_code'))
+          ->condition('cc_status', 1)
+          ->execute(); */
+        $return['country'] = '';
+        break;
+      case 'category':
+        $return[''] = '';
+        break;
+      case 'q':
+        $return[''] = '';
+        break;
+      case 'sources':
+        $return[''] = '';
+        break;
+      case 'domains':
+        $return[''] = '';
+        break;
+      case 'excludeDomains':
+        $return[''] = '';
+        break;
+      case 'from':
+        $return[''] = '';
+        break;
+      case 'to':
+        $return[''] = '';
+        break;
+      case 'language':
+        $return[''] = '';
+        break;
+      case 'sortBy':
+        $return[''] = '';
+        break;
+      case 'pageSize':
+        $return[''] = '';
+        break;
+      case 'page':
+        $return[''] = '';
+        break;
+    }
+  }
+  return $return;
+}
+
+/**
+ * NewsApi response Fetcher.
+ * @param String $request_end_point
+ * @param Array $request_args
+ * @return Array
+ */
+function _call_execute_curl_request($request_end_point, $request_args = array()) {
+
+  /** Build GET Request QueryString */
+  $base_newsapi_url = variable_get('newsbucket_api_curl', 'https://newsapi.org/v2/');
+  $NewsApiURL = trim(sprintf('%s%s?%s', $base_newsapi_url, $request_end_point, http_build_query($request_args)));
+
+  /** Initialize cUrl request. */
+  $nb_ch = curl_init();
+
+  /** cUrl Options. */
+  $curl_setopt_array = array(
+    CURLOPT_TIMEOUT => 60,
+    CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+    CURLOPT_URL => $NewsApiURL,
+    CURLOPT_RETURNTRANSFER => 1,
+  );
+  curl_setopt_array($nb_ch, $curl_setopt_array);
+
+  /** cUrl Response */
+  $nb_output = curl_exec($nb_ch);
+
+  /** Validate success response */
+  $curl_errno = curl_errno($nb_ch);
+  if ($curl_errno) {
+    $message = "Error occured while cURL request,<br>Error No: {$curl_errno},<br>Error Description: " . curl_error($nb_ch);
+    watchdog('NewsBucket', $message);
+    return array('status' => FALSE, 'message' => t($message));
+  }
+
+  /** close curl resource to free up system resources */
+  curl_close($nb_ch);
+
+  return array('status' => TRUE, 'response' => $nb_output);
+}
+
+/**
+ * Process news response of newsapi.
+ * @param String $request_end_point
+ * @param Array $newsApiResp
+ */
+function _call_process_newsapi_response($request_end_point = '', $newsApiResp = array()) {
+
+  $response = array('status' => FALSE, 'response' => '');
+
+  if ($newsApiResp['status'] == 'ok') {
+
+    switch ($request_end_point) {
+      case 'top-headlines':
+      case 'everything':
+
+        echo "<pre>";
+        var_dump($newsApiResp['articles']);
+        echo "</pre>";
+
+        break;
+      case 'sources':
+        /*
+          echo "<pre>";
+          var_dump($newsApiResp['sources']);
+          echo "</pre>";
+         */
+
+        foreach ($newsApiResp['sources'] as $row) {
+
+          db_merge('newsbucket_publishers')
+            ->key(array('p_api_id' => $row['id']))
+            ->fields(array(
+              'p_api_id' => $row['id'],
+              'p_name' => $row['name'],
+              'p_description' => $row['description'],
+              'p_url' => $row['url'],
+              'p_category' => $row['category'],
+              'p_language' => $row['language'],
+              'p_country' => $row['country']
+            ))
+            ->execute();
+        }
+
+        $message = 'NewsBucket Configured Successfully';
+        $response['status'] = TRUE;
+        $response['response'] = $message;
+        drupal_set_message($message);
+        break;
+    }
+  }
+  elseif ($newsApiResp['status'] == 'error') {
+
+    $response['status'] = FALSE;
+    $response['error_code'] = $newsApiResp['code'];
+    $response['error_message'] = $newsApiResp['message'];
+    watchdog('_call_process_newsapi_response', "<pre>" . print_r(array($request_end_point => $response), true) . "</pre>", '', WATCHDOG_DEBUG);
+  }
+
+  return $response;
+}
+
+/**
+ * NewsBucket API request reader.
+ * @param type $params
+ * @return type
+ */
+function _call_newsbucket_api($params = array()) {
+
+  /** Default declarations */
+  $valid_endpoints = array('top-headlines', 'everything', 'sources');
+  $request_end_point = strtolower($params['end_point']);
+
+  /** validate request. */
+  if (empty($params)) {
+    return array('status' => FALSE, 'message' => t('No request parameters found!'));
+  }
+  elseif (!isset($params['end_point']) || !in_array($request_end_point, $valid_endpoints)) {
+    return array('status' => FALSE, 'message' => t('Invalid Request!'));
+  }
+
+  /** Make Request to NewsApi. */
+  $cUrlResponse = _call_execute_curl_request($request_end_point, _call_newsbucket_sanitize_request_params($params));
+
+  if ($cUrlResponse['status'] === FALSE) {
+    return $cUrlResponse;
+  }
+
+  /** Process API Response. */
+  if (!empty($cUrlResponse['response']) && isJSON($cUrlResponse['response'])) {
+    return _call_process_newsapi_response($request_end_point, json_decode($cUrlResponse['response'], $assoc = true));
+  }
+}

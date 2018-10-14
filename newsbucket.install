@@ -1,0 +1,557 @@
+<?php
+
+/**
+ * 
+ * NewsBucket Installation
+ * @file: newsbucket.install
+ * @author Vipin Suthar <vipin.jangid45@gmail.com>
+ * @package NewsApi(REST) development integration
+ * @website https://newsapi.org
+ */
+
+/**
+ * Implements hook_install().
+ * API key: a075b689536d41698ed57e07eb250b18
+ */
+function newsbucket_install() {
+
+  $t = get_t();
+
+  //Initialize default setting's values
+  variable_set('newsbucket_api_provider', 'NewsAPI');
+  variable_set('newsbucket_api_url', 'https://newsapi.org/');
+  variable_set('newsbucket_api_auth_key', 'a075b689536d41698ed57e07eb250b18');
+  variable_set('newsbucket_api_curl', 'https://newsapi.org/v2/');
+  variable_set('newsbucket_api_requests', 20);
+  variable_set('newsbucket_api_country', 'us');
+  variable_set('newsbucket_api_category', 'technology');
+
+  //Success message of configuration.
+  drupal_set_message($t('NewsBucket settings are saved!'));
+
+  /**
+   * NewsBucket ContentType
+   * 1. Publisher ID
+   * 2. Publisher Name
+   * 3. Author
+   * 4. Title
+   * 5. Description
+   * 6. Url
+   * 7. Image
+   * 8. Published At
+   * 9. Content
+   */
+  /**
+   * Define custom content type.   
+   */
+  $content_type = array(
+    'type' => 'news_bucket',
+    'name' => 'News Bucket',
+    'base' => 'node_content',
+    'description' => 'News - Organiser, a container of news headlines, i.e. stories, articles, breaking news, etc.',
+    'has_title' => 1,
+    'title_label' => $t('Title'),
+    'custom' => 1,
+  );
+
+  //set content type defaults.
+  $node_type = node_type_set_defaults($content_type);
+
+  //save the content type.
+  node_type_save($node_type);
+
+  //add content type fields to body
+  node_add_body_field($node_type, $t("Description"));
+
+  /**
+   * Create fields & instances
+   */
+  $fields = $instances = array();
+  $w = 3;
+
+  /* Publisher ID Field */
+  $fields['newsbucket_publisher_id'] = array(
+    'field_name' => 'newsbucket_publisher_id',
+    'type' => 'text',
+    'cardinality' => '1',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'description' => $t('field to store Publisher ID'),
+  );
+
+  /* Publisher ID Instance */
+  $instances['newsbucket_publisher_id'] = array(
+    'field_name' => 'newsbucket_publisher_id',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Publisher ID'),
+    'description' => $t("Publisher's unique Identifier."),
+    'required' => 1,
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textfield',
+      'settings' => array(
+        'size' => 255,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'settings' => array(),
+        'module' => 'text',
+        'weight' => 1,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* Publisher Name Field */
+  $fields['newsbucket_publisher_name'] = array(
+    'field_name' => 'newsbucket_publisher_name',
+    'type' => 'text',
+    'cardinality' => '1',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'description' => $t('field to store Publisher Name'),
+  );
+
+  /* Publisher Name Instance */
+  $instances['newsbucket_publisher_name'] = array(
+    'field_name' => 'newsbucket_publisher_name',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Publisher Name'),
+    'description' => $t('Name of a specific News Publisher.'),
+    'required' => 1,
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textfield',
+      'settings' => array(
+        'size' => 255,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => '0',
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'settings' => array(),
+        'module' => 'text',
+        'weight' => 2,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* Author Field */
+  $fields['newsbucket_author_name'] = array(
+    'field_name' => 'newsbucket_author_name',
+    'type' => 'text',
+    'cardinality' => '1',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'description' => $t('field to store Auther of the News Headline.'),
+  );
+
+  /* Author Instance */
+  $instances['newsbucket_author_name'] = array(
+    'field_name' => 'newsbucket_author_name',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Author'),
+    'description' => $t('Author Name of the News Headline.'),
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textfield',
+      'module' => 'text',
+      'settings' => array(
+        'size' => 255,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => '0',
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'weight' => 3,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* URL Field */
+  $fields['newsbucket_url'] = array(
+    'field_name' => 'newsbucket_url',
+    'type' => 'text',
+    'cardinality' => '1',
+    'settings' => array(
+      'max_length' => 2048
+    ),
+    'description' => $t('field to store URL of news headline'),
+  );
+
+  /* URL Instance */
+  $instances['newsbucket_url'] = array(
+    'field_name' => 'newsbucket_url',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Headline URL'),
+    'description' => $t('Scource URL of the News Headline.'),
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textfield',
+      'module' => 'text',
+      'settings' => array(
+        'size' => 2048,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => '0',
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'module' => 'text',
+        'weight' => 6,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* Image Field */
+  $fields['newsbucket_image'] = array(
+    'field_name' => 'newsbucket_image',
+    'type' => 'text',
+    'cardinality' => 1,
+    'settings' => array(
+      'max_length' => 2048
+    ),
+    'description' => $t('field to store URL of news headline image.'),
+  );
+
+  /* Image Instance */
+  $instances['newsbucket_image'] = array(
+    'field_name' => 'newsbucket_image',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Image'),
+    'description' => $t('News Headline Image(if available)'),
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textfield',
+      'settings' => array(
+        'size' => 2048,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => '0',
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'settings' => array(),
+        'module' => 'text',
+        'weight' => 7,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* Published At Field */
+  $fields['newsbucket_published_at'] = array(
+    'field_name' => 'newsbucket_published_at',
+    'type' => 'text',
+    'cardinality' => '1',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'description' => $t('field to store Date Time of news headline'),
+  );
+
+  /* Published At Instance */
+  $instances['newsbucket_published_at'] = array(
+    'field_name' => 'newsbucket_published_at',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Published At'),
+    'description' => $t('Headline Publish DateTime'),
+    'widget' => array(
+      'type' => 'text_textfield',
+      'weight' => '4',
+      'settings' => array(
+        'size' => 60,
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'settings' => array(),
+        'module' => 'text',
+        'weight' => 8,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  /* Content Field */
+  $fields['newsbucket_content'] = array(
+    'field_name' => 'newsbucket_content',
+    'type' => 'text_long',
+    'cardinality' => '1',
+    'description' => $t('field to store Contents of news headline'),
+  );
+
+  /* Content Instance */
+  $instances['newsbucket_content'] = array(
+    'field_name' => 'newsbucket_content',
+    'entity_type' => 'node',
+    'bundle' => 'news_bucket',
+    'label' => $t('Content'),
+    'description' => $t('Headline contents'),
+    'widget' => array(
+      'weight' => $w++,
+      'type' => 'text_textarea',
+      'module' => 'text',
+      'settings' => array(
+        'rows' => '5',
+      ),
+    ),
+    'settings' => array(
+      'text_processing' => '0',
+      'user_register_form' => FALSE,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type' => 'text_default',
+        'settings' => array(),
+        'module' => 'text',
+        'weight' => 9,
+      ),
+      'teaser' => array(
+        'type' => 'hidden',
+        'label' => 'above',
+        'settings' => array(),
+        'weight' => 0,
+      ),
+    ),
+  );
+
+  foreach ($fields as $field) {
+    field_create_field($field);
+  }
+
+  foreach ($instances as $instance) {
+    field_create_instance($instance);
+  }
+
+  drupal_set_message("NewsBucket Content type created.");
+
+  function newsbucket_schema() {
+    $schema = array();
+
+    if (!db_table_exists('newsbucket_country_category')) {
+      $schema['newsbucket_country_category'] = array(
+        'description' => 'newsbucket news publisher country catalogue',
+        'fields' => array(
+          'cc_id' => array(
+            'description' => 'The primary identifier for country update.',
+            'type' => 'serial',
+            'size' => 'small',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+          'cc_country' => array(
+            'description' => 'The name of country.',
+            'type' => 'varchar',
+            'size' => 'normal',
+            'not null' => TRUE,
+          ),
+          'cc_api_code' => array(
+            'description' => 'The country api code identifier.',
+            'type' => 'varchar',
+            'size' => 'normal',
+            'not null' => TRUE,
+          ),
+          'cc_status' => array(
+            'description' => 'The active status identifier of a country.',
+            'type' => 'int',
+            'size' => 'tiny',
+            'not null' => TRUE,
+            'default' => 1,
+          ),
+        ),
+        'primary key' => array('cc_id'),
+      );
+    }
+
+    if (!db_table_exists('newsbucket_publishers')) {
+      $schema['newsbucket_publishers'] = array(
+        'description' => 'newsbucket news publisher country catalogue',
+        'fields' => array(
+          'p_id' => array(
+            'description' => 'The primary identifier for News-Publisher update.',
+            'type' => 'serial',
+            'size' => 'small',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+          'p_api_id' => array(
+            'description' => 'The unique identifier for Publisher API code.',
+            'type' => 'varchar',
+            'size' => 'normal',
+            'not null' => TRUE,
+          ),
+          'p_name' => array(
+            'description' => 'The title of the News-Publisher.',
+            'type' => 'varchar',
+            'size' => 'normal',
+            'not null' => TRUE,
+          ),
+          'p_description' => array(
+            'description' => 'The description about the News-publisher.',
+            'type' => 'varchar',
+            'size' => 'normal',
+          ),
+          'p_url' => array(
+            'description' => 'The URL of the News-Publisher.',
+            'type' => 'varchar',
+            'size' => 'normal',
+          ),
+          'p_category' => array(
+            'description' => 'The category of Publisher contents.',
+            'type' => 'varchar',
+            'size' => 'normal',
+          ),
+          'p_language' => array(
+            'description' => 'The active status identifier of a country.',
+            'type' => 'char',
+            'size' => 'normal',
+          ),
+          'p_country' => array(
+            'description' => 'The active status identifier of a country.',
+            'type' => 'char',
+            'size' => 'normal',
+          ),
+        ),
+        'primary key' => array('p_id'),
+      );
+    }
+
+    if (!db_table_exists('newsbucket_user_profiles')) {
+      $schema['newsbucket_user_profiles'] = array(
+        'description' => '',
+        'fields' => array(
+          'up_id' => array('description' => 'primary key identifier', 'unsigned' => TRUE, 'type' => 'serial', 'size' => 'big', 'not null' => TRUE),
+          'up_uid' => array('description' => 'users reference key identifier', 'type' => 'int', 'size' => 'big'),
+          'up_countries' => array('description' => 'user news countries', 'type' => 'text', 'size' => 'normal'),
+          'up_categories' => array('description' => 'user news categories', 'type' => 'text', 'size' => 'normal'),
+          'up_nof' => array('description' => 'number of records per page', 'type' => 'int', 'size' => 'medium', 'unsigned' => TRUE, 'default' => 10),
+        ),
+        'primary key' => array(),
+      );
+    }
+    return $schema;
+  }
+
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function newsbucket_uninstall() {
+
+  //Initialize default setting's values
+  variable_del('newsbucket_api_provider');
+  variable_del('newsbucket_api_url');
+  variable_del('newsbucket_api_auth_key');
+  variable_del('newsbucket_api_curl');
+  variable_del('newsbucket_api_requests');
+  variable_del('newsbucket_api_country');
+  variable_del('newsbucket_api_category');
+
+  $t = get_t();
+  //Success message of configuration removal!
+  drupal_set_message($t("NewsBucket settings are removed!"));
+
+  //get all node ID's with newsbucket content type
+  $result = db_query("
+      SELECT nid
+      FROM {node}
+      WHERE {node}.type = :type
+    ", array(':type' => 'news_bucket'));
+
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+
+  //Delete all newsbucket contents
+  node_delete_multiple($nids);
+  drupal_set_message($t("NewsBucket Content removed!"));
+
+  //Remove all the fields and field instances.
+  foreach (field_info_instances("node", "news_bucket") as $field_name => $instance) {
+    field_delete_instance($instance);
+  }
+  drupal_set_message($t("NewBucket fields and field intances removed!"));
+
+  node_type_delete("news_bucket");
+  drupal_set_message($t("NewsBucket content type removed!"));
+
+  //cleanup the field persistent.
+  field_purge_batch(1000);
+  cache_clear_all();
+}
